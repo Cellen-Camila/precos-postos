@@ -1,0 +1,278 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Preços por bairro</title>
+<style>
+  :root {
+    --bg: #faf9f6; --panel: #ffffff; --fg: #1f1e1c; --muted: #6b6862; --line: #e4e1da;
+    --bar: #c9c5bc; --bar-hi: #2f6db5; --line2: #c0762a; --meu: #c2362f; --ok: #237a3b; --bad: #b3261e;
+    --prox: rgba(250, 204, 21, .32); --prox-dot: rgba(234, 179, 8, .85);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #1b1a18; --panel: #24231f; --fg: #ecebe6; --muted: #a29f97; --line: #393731;
+      --bar: #55524b; --bar-hi: #6aa2e8; --line2: #e3a35c; --meu: #f0716a; --ok: #6fcf87; --bad: #ff8a80;
+      --prox: rgba(250, 204, 21, .22); --prox-dot: rgba(250, 204, 21, .8);
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #1b1a18; --panel: #24231f; --fg: #ecebe6; --muted: #a29f97; --line: #393731;
+    --bar: #55524b; --bar-hi: #6aa2e8; --line2: #e3a35c; --meu: #f0716a; --ok: #6fcf87; --bad: #ff8a80;
+    --prox: rgba(250, 204, 21, .22); --prox-dot: rgba(250, 204, 21, .8);
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  .pg { max-width: 1040px; margin: 0 auto; padding: 24px 16px 48px; display: grid; gap: 28px; }
+  h1 { font: 400 2rem/1.15 Georgia, "Times New Roman", serif; margin: 0; }
+  h2 { font-size: 1.1rem; font-weight: 600; margin: 0 0 4px; }
+  .frase { margin: 6px 0 0; max-width: 70ch; }
+  .frase b { font-weight: 600; font-variant-numeric: tabular-nums; }
+  .nota, .fonte { color: var(--muted); font-size: .85rem; margin: 4px 0 0; }
+  .filtros { display: flex; flex-wrap: wrap; gap: 14px; }
+  .filtros label { display: grid; gap: 4px; font-size: .8rem; color: var(--muted); }
+  select { font: inherit; color: var(--fg); background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; min-width: 150px; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px; display: grid; gap: 4px; min-width: 0; }
+  .card h3 { margin: 0; font-size: .8rem; font-weight: 600; color: var(--muted); }
+  .num { font: 400 2rem/1.1 Georgia, serif; font-variant-numeric: tabular-nums; }
+  .sub { font-size: .8rem; color: var(--muted); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+  .bom { color: var(--ok); } .ruim { color: var(--bad); }
+  .legenda { display: flex; flex-wrap: wrap; gap: 14px; font-size: .8rem; color: var(--muted); margin: 6px 0; }
+  .legenda span { display: inline-flex; align-items: center; gap: 6px; }
+  .legenda i { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+  .grafico { position: relative; min-height: 120px; }
+  .grafico svg { display: block; width: 100%; }
+  .grafico text { fill: var(--muted); font-size: 12px; font-family: inherit; }
+  .grafico text.rot { fill: var(--fg); font-variant-numeric: tabular-nums; }
+  .dica { position: absolute; pointer-events: none; background: var(--panel); border: 1px solid var(--line); box-shadow: 0 4px 14px rgba(0,0,0,.15); border-radius: 8px; padding: 8px 10px; font-size: .8rem; white-space: nowrap; z-index: 2; display: none; font-variant-numeric: tabular-nums; }
+  .tab-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: .9rem; font-variant-numeric: tabular-nums; }
+  th { text-align: left; font-weight: 600; color: var(--muted); font-size: .8rem; padding: 6px 8px; border-bottom: 1px solid var(--line); }
+  td { padding: 6px 8px; border-bottom: 1px solid var(--line); }
+  .dir { text-align: right; }
+  tr.meu td { font-weight: 600; background: var(--panel); }
+  tr.prox td { background: var(--prox); }
+  .amarelo { display: inline-block; width: 12px; height: 12px; border-radius: 3px; background: var(--prox-dot); vertical-align: -1px; margin-right: 4px; }
+  @media (max-width: 560px) { .col-end { display: none; } h1 { font-size: 1.6rem; } }
+</style>
+</head>
+<body>
+<main class="pg">
+  <header>
+    <h1>Preços por bairro</h1>
+    <p class="frase" id="frase">Carregando…</p>
+    <p class="fonte">Preços das notas fiscais no Nota Potiguar (SEFAZ-RN), captados todo dia às 9h30. Um posto só aparece depois de vender aquele combustível com nota. Atualizado em <span id="atualizado">—</span>.</p>
+  </header>
+
+  <div class="filtros">
+    <label>Combustível
+      <select id="sel-comb">
+        <option>Gasolina comum</option><option>Etanol</option><option>Diesel S500</option><option>Diesel S10</option><option>GNV</option>
+      </select>
+    </label>
+    <label>Dia <select id="sel-data"></select></label>
+    <label>Área
+      <select id="sel-area">
+        <option value="prox" selected>Postos próximos</option>
+        <option value="viz">Bairros de preferência</option>
+        <option value="ALECRIM">Alecrim</option><option value="TIROL">Tirol</option><option value="CIDADE ALTA">Cidade Alta</option>
+        <option value="PETROPOLIS">Petrópolis</option><option value="LAGOA NOVA">Lagoa Nova</option><option value="LAGOA SECA">Lagoa Seca</option>
+        <option value="BARRO VERMELHO">Barro Vermelho</option><option value="natal">Toda Natal</option>
+      </select>
+    </label>
+  </div>
+
+  <div class="cards">
+    <div class="card"><h3>Menor preço · <span class="nome-area">—</span></h3><div class="num" id="c-menor">—</div><div class="sub" id="c-menor-onde">—</div></div>
+    <div class="card"><h3>Média · <span class="nome-area">—</span></h3><div class="num" id="c-media">—</div><div class="sub"><span id="c-qtd">—</span> postos com nota (sem contar o seu)</div></div>
+    <div class="card"><h3>Seu posto (MIGRA, Alecrim)</h3><div class="num" id="c-meu">—</div><div class="sub"><span id="c-dmenor">—</span> vs. menor · <span id="c-dmedia">—</span> vs. média</div></div>
+  </div>
+
+  <section>
+    <h2>Preço por bairro</h2>
+    <p class="nota">Barra = menor preço do bairro; traço = média do bairro. A linha tracejada é o preço do seu posto.</p>
+    <div class="legenda"><span><i style="background:var(--bar-hi)"></i>Menor preço</span><span><i style="background:var(--fg)"></i>Média</span><span><i style="background:var(--meu)"></i>Seu posto</span></div>
+    <div class="grafico" id="g-bairros"></div>
+  </section>
+
+  <section>
+    <h2>Evolução diária</h2>
+    <p class="nota">Menor preço e média dos concorrentes na área escolhida, e o preço do seu posto, a cada captação.</p>
+    <div class="legenda"><span><i style="background:var(--bar-hi)"></i>Menor preço</span><span><i style="background:var(--line2)"></i>Média</span><span><i style="background:var(--meu)"></i>Seu posto</span></div>
+    <div class="grafico" id="g-evolucao"></div>
+  </section>
+
+  <section>
+    <h2>Postos</h2>
+    <p class="nota">Do mais barato para o mais caro, no dia e na área escolhidos. <span class="amarelo"></span>Em amarelo, os postos próximos.</p>
+    <div class="tab-wrap">
+      <table>
+        <thead><tr><th>Posto</th><th>Bairro</th><th class="col-end">Endereço</th><th class="dir">Preço (R$)</th><th>Nota emitida</th></tr></thead>
+        <tbody id="t-postos"></tbody>
+      </table>
+    </div>
+  </section>
+</main>
+
+<script src="dados.js"></script>
+<script>
+(() => {
+  const BAIRROS = ['ALECRIM', 'TIROL', 'CIDADE ALTA', 'PETROPOLIS', 'LAGOA NOVA', 'LAGOA SECA', 'BARRO VERMELHO'];
+  const PROXIMOS = ['POSTO LEMON VII - ALECRIM', 'POSTO GODEIRAO ALECRIM', 'POSTO CAMPO BELO ALECRIM', 'POSTO CENTRAL SEIS', 'POSTO RAISSA 2 LTDA', 'POSTO LEMON IX - ALEXANDRINO'];
+  const NOMES = { ALECRIM: 'Alecrim', TIROL: 'Tirol', 'CIDADE ALTA': 'Cidade Alta', PETROPOLIS: 'Petrópolis', 'LAGOA NOVA': 'Lagoa Nova', 'LAGOA SECA': 'Lagoa Seca', 'BARRO VERMELHO': 'Barro Vermelho' };
+  const SVGNS = 'http://www.w3.org/2000/svg';
+  const dados = (window.PRECOS && (window.PRECOS.rows || window.PRECOS)) || [];
+  const linhas = dados.map((r) => ({ ...r, preco: Number(r.preco), bairro: String(r.bairro || '').toUpperCase(), prox: PROXIMOS.includes(String(r.posto || '').trim().toUpperCase()) }));
+  const dias = [...new Set(linhas.map((r) => r.data))].sort();
+  const st = { comb: 'Gasolina comum', data: dias[dias.length - 1], area: 'prox' };
+  const $ = (id) => document.getElementById(id);
+
+  const r$ = (v) => v == null || !isFinite(v) ? '—' : 'R$ ' + v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 3 });
+  const dif = (v) => v == null || !isFinite(v) ? '—' : (v > 0.005 ? '+' : v < -0.005 ? '−' : '') + 'R$ ' + Math.abs(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const dia = (s) => s ? s.slice(0, 10).split('-').reverse().join('/') : '—';
+  const naArea = (r, a) => a === 'natal' || (a === 'prox' ? r.prox : a === 'viz' ? BAIRROS.includes(r.bairro) : r.bairro === a);
+  const nomeArea = (frase) => {
+    const a = st.area;
+    if (a === 'prox') return frase ? 'nos postos próximos' : 'postos próximos';
+    if (a === 'viz') return frase ? 'nos bairros de preferência' : 'bairros de preferência';
+    if (a === 'natal') return frase ? 'em toda Natal' : 'toda Natal';
+    return (frase ? 'no bairro ' : '') + (NOMES[a] || a);
+  };
+  const resumo = (d) => {
+    const g = linhas.filter((r) => r.data === d && r.combustivel === st.comb);
+    const conc = g.filter((r) => !r.meuPosto && naArea(r, st.area)).sort((a, b) => a.preco - b.preco);
+    const meus = g.filter((r) => r.meuPosto).map((r) => r.preco);
+    const meu = meus.length ? Math.min(...meus) : null;
+    const media = conc.length ? conc.reduce((s, r) => s + r.preco, 0) / conc.length : null;
+    return { conc, menor: conc[0] || null, media, meu };
+  };
+  const el = (tag, attrs, txt) => { const e = document.createElementNS(SVGNS, tag); for (const k in attrs || {}) e.setAttribute(k, attrs[k]); if (txt != null) e.textContent = txt; return e; };
+  const escala = (lo, hi, a, b) => (v) => a + (v - lo) / (hi - lo || 1) * (b - a);
+  const ticks = (lo, hi, n) => { const passo = [0.01, 0.02, 0.05, 0.1, 0.2, 0.25, 0.5, 1].find((p) => (hi - lo) / p <= n) || 1; const out = []; for (let t = Math.ceil(lo / passo) * passo; t <= hi + 1e-9; t += passo) out.push(Math.round(t * 100) / 100); return out; };
+  const fmtT = (t) => t.toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+  const dicaEm = (box) => { let d = box.querySelector('.dica'); if (!d) { d = document.createElement('div'); d.className = 'dica'; box.appendChild(d); } return d; };
+  const mostraDica = (box, ev, linhasTxt) => {
+    const d = dicaEm(box); d.replaceChildren(...linhasTxt.map((t, i) => { const x = document.createElement('div'); x.textContent = t; if (i === 0) x.style.fontWeight = '600'; return x; }));
+    d.style.display = 'block'; const b = box.getBoundingClientRect();
+    d.style.left = Math.min(ev.clientX - b.left + 12, box.clientWidth - d.offsetWidth - 4) + 'px'; d.style.top = (ev.clientY - b.top + 12) + 'px';
+  };
+
+  function desenhar() {
+    const r = resumo(st.data);
+    document.querySelectorAll('.nome-area').forEach((e) => { e.textContent = nomeArea(false); });
+    // Frase
+    const f = $('frase'); f.replaceChildren();
+    const b = (t) => { const x = document.createElement('b'); x.textContent = t; return x; };
+    if (r.menor) {
+      f.append('Em ', b(dia(st.data)), ', o menor preço de ', b(st.comb.toLowerCase().replace('gnv', 'GNV').replace('diesel s', 'diesel S')), ' ' + nomeArea(true) + ' é ', b(r$(r.menor.preco)), ', no posto ' + r.menor.posto + ' (' + r.menor.bairro + '). ');
+      if (r.meu != null) { const d = r.meu - r.menor.preco; f.append('Seu posto cobra ', b(r$(r.meu)), ', ', b(d > 0.005 ? dif(d) + ' acima' : d < -0.005 ? dif(d).replace('−', '') + ' abaixo' : 'o mesmo preço'), ' em relação a ele.'); }
+      else f.append('Seu posto não emitiu nota desse combustível nesse dia.');
+    } else f.textContent = 'Nenhum posto dessa área teve nota desse combustível em ' + dia(st.data) + '.';
+    // Cartões
+    $('c-menor').textContent = r$(r.menor && r.menor.preco);
+    $('c-menor-onde').textContent = r.menor ? r.menor.posto + ' · ' + r.menor.bairro : '—';
+    $('c-media').textContent = r$(r.media);
+    $('c-qtd').textContent = String(r.conc.length);
+    $('c-meu').textContent = r.meu != null ? r$(r.meu) : 'sem nota';
+    const dm = r.meu != null && r.menor ? r.meu - r.menor.preco : null, dd = r.meu != null && r.media != null ? r.meu - r.media : null;
+    $('c-dmenor').textContent = dif(dm); $('c-dmenor').className = dm == null ? '' : dm > 0.005 ? 'ruim' : 'bom';
+    $('c-dmedia').textContent = dif(dd); $('c-dmedia').className = dd == null ? '' : dd > 0.005 ? 'ruim' : 'bom';
+    graficoBairros(r.meu); graficoEvolucao(); tabela();
+  }
+
+  function graficoBairros(meu) {
+    const box = $('g-bairros'); box.replaceChildren();
+    const g = new Map();
+    linhas.filter((r) => r.data === st.data && r.combustivel === st.comb && (st.area === 'natal' || BAIRROS.includes(r.bairro))).forEach((r) => { if (!g.has(r.bairro)) g.set(r.bairro, []); g.get(r.bairro).push(r.preco); });
+    const ls = [...g.entries()].map(([bairro, p]) => ({ bairro, min: Math.min(...p), media: p.reduce((s, v) => s + v, 0) / p.length, n: p.length })).sort((a, b) => a.min - b.min);
+    if (!ls.length) { box.textContent = 'Nenhum posto com nota desse combustível nesse dia.'; return; }
+    const W = Math.max(300, box.clientWidth), rowH = 26, top = 22, H = top + ls.length * rowH + 22;
+    const left = Math.min(Math.max(...ls.map((l) => l.bairro.length)) * 7.4 + 12, W * 0.42), right = 56;
+    const vals = ls.flatMap((l) => [l.min, l.media]).concat(meu != null ? [meu] : []);
+    const lo0 = Math.min(...vals), hi0 = Math.max(...vals), pad = Math.max(0.05, (hi0 - lo0) * 0.15), lo = lo0 - pad, hi = hi0 + pad;
+    const x = escala(lo, hi, left, W - right);
+    const svg = el('svg', { viewBox: `0 0 ${W} ${H}`, height: H, role: 'img', 'aria-label': 'Menor preço e média por bairro' });
+    ticks(lo, hi, Math.max(2, Math.floor((W - left - right) / 80))).forEach((t) => { svg.append(el('line', { x1: x(t), x2: x(t), y1: top - 6, y2: H - 16, stroke: 'var(--line)' }), el('text', { x: x(t), y: top - 10, 'text-anchor': 'middle' }, fmtT(t))); });
+    const destaque = BAIRROS.includes(st.area) ? st.area : 'ALECRIM';
+    ls.forEach((l, i) => {
+      const y = top + i * rowH, hi2 = l.bairro === destaque;
+      const t = el('text', { x: left - 8, y: y + rowH / 2 + 4, 'text-anchor': 'end' }, l.bairro); if (hi2) { t.style.fill = 'var(--fg)'; t.style.fontWeight = '600'; } svg.append(t);
+      svg.append(el('rect', { x: left, y: y + 5, height: rowH - 10, rx: 3, width: Math.max(1, x(l.min) - left), fill: hi2 ? 'var(--bar-hi)' : 'var(--bar)' }));
+      svg.append(el('line', { x1: x(l.media), x2: x(l.media), y1: y + 3, y2: y + rowH - 3, stroke: 'var(--fg)', 'stroke-width': 2 }));
+      svg.append(el('text', { class: 'rot', x: Math.max(x(l.min), x(l.media)) + 6, y: y + rowH / 2 + 4 }, r$(l.min).replace('R$ ', '')));
+      const alvo = el('rect', { x: 0, y, width: W, height: rowH, fill: 'transparent' });
+      alvo.addEventListener('pointermove', (ev) => mostraDica(box, ev, [l.bairro, 'Menor: ' + r$(l.min), 'Média: ' + r$(l.media), l.n + (l.n === 1 ? ' posto' : ' postos')]));
+      alvo.addEventListener('pointerleave', () => { dicaEm(box).style.display = 'none'; });
+      svg.append(alvo);
+    });
+    if (meu != null) {
+      svg.append(el('line', { x1: x(meu), x2: x(meu), y1: top - 6, y2: H - 16, stroke: 'var(--meu)', 'stroke-width': 2, 'stroke-dasharray': '4 3', 'pointer-events': 'none' }));
+      const t = el('text', { x: x(meu) > W - 110 ? x(meu) - 4 : x(meu) + 4, y: H - 2, 'text-anchor': x(meu) > W - 110 ? 'end' : 'start' }, 'Seu posto ' + r$(meu)); t.style.fill = 'var(--meu)'; svg.append(t);
+    }
+    box.append(svg);
+  }
+
+  function graficoEvolucao() {
+    const box = $('g-evolucao'); box.replaceChildren();
+    const pts = dias.map((d) => { const r = resumo(d); return { d, menor: r.menor ? r.menor.preco : null, media: r.media, meu: r.meu }; }).filter((p) => p.menor != null || p.meu != null);
+    if (!pts.length) { box.textContent = 'Sem dados desse combustível nessa área.'; return; }
+    const series = [['menor', 'Menor preço', 'var(--bar-hi)'], ['media', 'Média', 'var(--line2)'], ['meu', 'Seu posto', 'var(--meu)']];
+    const W = Math.max(300, box.clientWidth), H = 220, m = { t: 12, r: 64, b: 26, l: 48 };
+    const vals = pts.flatMap((p) => series.map(([k]) => p[k])).filter((v) => v != null);
+    const lo0 = Math.min(...vals), hi0 = Math.max(...vals), pad = Math.max(0.05, (hi0 - lo0) * 0.2), lo = lo0 - pad, hi = hi0 + pad;
+    const y = escala(lo, hi, H - m.b, m.t);
+    const x = pts.length === 1 ? () => (m.l + W - m.r) / 2 : (i) => m.l + 10 + i * (W - m.l - m.r - 20) / (pts.length - 1);
+    const svg = el('svg', { viewBox: `0 0 ${W} ${H}`, height: H, role: 'img', 'aria-label': 'Evolução diária do preço' });
+    ticks(lo, hi, 4).forEach((t) => { svg.append(el('line', { x1: m.l, x2: W - m.r, y1: y(t), y2: y(t), stroke: 'var(--line)' }), el('text', { x: m.l - 6, y: y(t) + 4, 'text-anchor': 'end' }, fmtT(t))); });
+    const passo = Math.max(1, Math.ceil(pts.length / Math.max(2, Math.floor((W - m.l) / 60))));
+    pts.forEach((p, i) => { if (i % passo === 0 || i === pts.length - 1) svg.append(el('text', { x: x(i), y: H - 6, 'text-anchor': 'middle' }, p.d.slice(8, 10) + '/' + p.d.slice(5, 7))); });
+    const rots = [];
+    series.forEach(([k, , cor]) => {
+      const ps = pts.map((p, i) => [i, p[k]]).filter(([, v]) => v != null);
+      if (!ps.length) return;
+      svg.append(el('path', { d: ps.map(([i, v], j) => (j ? 'L' : 'M') + x(i) + ',' + y(v)).join(''), fill: 'none', stroke: cor, 'stroke-width': 2 }));
+      ps.forEach(([i, v]) => svg.append(el('circle', { cx: x(i), cy: y(v), r: 3.5, fill: cor })));
+      const [li, lv] = ps[ps.length - 1]; if (li === pts.length - 1) rots.push({ v: lv, y: y(lv) + 4, cor });
+    });
+    rots.sort((a, b) => a.y - b.y); for (let i = 1; i < rots.length; i++) if (rots[i].y - rots[i - 1].y < 15) rots[i].y = rots[i - 1].y + 15;
+    rots.forEach((r) => { const t = el('text', { class: 'rot', x: x(pts.length - 1) + 10, y: r.y }, r$(r.v).replace('R$ ', '')); t.style.fill = r.cor; svg.append(t); });
+    const alvo = el('rect', { x: m.l, y: m.t, width: W - m.l - m.r, height: H - m.t - m.b, fill: 'transparent' });
+    alvo.addEventListener('pointermove', (ev) => {
+      const bx = svg.getBoundingClientRect(), mx = (ev.clientX - bx.left) * W / bx.width;
+      let bi = 0; pts.forEach((_, i) => { if (Math.abs(x(i) - mx) < Math.abs(x(bi) - mx)) bi = i; });
+      const p = pts[bi]; mostraDica(box, ev, [dia(p.d)].concat(series.map(([k, n]) => n + ': ' + r$(p[k]))));
+    });
+    alvo.addEventListener('pointerleave', () => { dicaEm(box).style.display = 'none'; });
+    svg.append(alvo);
+    if (pts.length === 1) svg.append(el('text', { x: m.l + 4, y: H - m.b - 6 }, 'O histórico cresce a cada captação diária.'));
+    box.append(svg);
+  }
+
+  function tabela() {
+    const tb = $('t-postos'); tb.replaceChildren();
+    linhas.filter((r) => r.data === st.data && r.combustivel === st.comb && (naArea(r, st.area) || r.meuPosto)).sort((a, b) => a.preco - b.preco).forEach((r) => {
+      const tr = document.createElement('tr'); tr.className = r.meuPosto ? 'meu' : r.prox ? 'prox' : '';
+      [[r.posto + (r.meuPosto ? ' (seu posto)' : '')], [r.bairro], [r.endereco, 'col-end'], [r$(r.preco).replace('R$ ', ''), 'dir'], [r.notaEmitida ? dia(r.notaEmitida) + ' ' + r.notaEmitida.slice(11, 16) : '']]
+        .forEach(([v, c]) => { const td = document.createElement('td'); td.textContent = v; if (c) td.className = c; tr.appendChild(td); });
+      tb.appendChild(tr);
+    });
+    if (!tb.children.length) { const tr = document.createElement('tr'), td = document.createElement('td'); td.colSpan = 5; td.textContent = 'Nenhum posto com nota nesse dia e área.'; tr.appendChild(td); tb.appendChild(tr); }
+  }
+
+  const selD = $('sel-data');
+  dias.slice().reverse().forEach((d) => selD.appendChild(new Option(dia(d), d)));
+  selD.value = st.data || '';
+  $('atualizado').textContent = window.PRECOS_ATUALIZADO || dia(st.data);
+  $('sel-comb').addEventListener('change', (e) => { st.comb = e.target.value; desenhar(); });
+  $('sel-area').addEventListener('change', (e) => { st.area = e.target.value; desenhar(); });
+  selD.addEventListener('change', (e) => { st.data = e.target.value; desenhar(); });
+  let w = 0; window.addEventListener('resize', () => { if (Math.abs(window.innerWidth - w) > 20) { w = window.innerWidth; desenhar(); } });
+  if (!linhas.length) { $('frase').textContent = 'Sem dados.'; return; }
+  desenhar();
+})();
+</script>
+</body>
+</html>
