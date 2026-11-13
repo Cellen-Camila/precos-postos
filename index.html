@@ -56,6 +56,18 @@
   tr.meu td { font-weight: 600; background: var(--panel); }
   tr.prox td { background: var(--prox); }
   .amarelo { display: inline-block; width: 12px; height: 12px; border-radius: 3px; background: var(--prox-dot); vertical-align: -1px; margin-right: 4px; }
+  .resumo { background: var(--prox); border: 1px solid var(--prox-dot); border-radius: 10px; padding: 14px 16px; display: grid; gap: 8px; min-width: 0; }
+  .resumo h2 { margin: 0; }
+  .resumo p { margin: 0; font-size: .85rem; }
+  .resumo th { text-align: right; color: var(--fg); border-bottom: 1px solid var(--prox-dot); white-space: nowrap; }
+  .resumo td { text-align: right; white-space: nowrap; vertical-align: top; border-bottom: 1px solid var(--prox-dot); }
+  .resumo th:first-child, .resumo td:first-child { text-align: left; white-space: normal; min-width: 150px; }
+  .resumo tr.r-meu td { font-weight: 700; }
+  .resumo tr.r-ref td { border-top: 2px solid var(--prox-dot); font-style: italic; }
+  .resumo .r-dif { display: block; font-size: .78rem; font-weight: 400; }
+  .resumo .r-barato { color: var(--bad); } .resumo .r-caro { color: var(--ok); }
+  .resumo .r-vazio { color: var(--muted); }
+  .resumo .r-onde { display: block; font-size: .75rem; font-style: normal; color: var(--muted); white-space: normal; max-width: 16ch; margin-left: auto; }
   @media (max-width: 560px) { .col-end { display: none; } h1 { font-size: 1.6rem; } }
 </style>
 </head>
@@ -63,6 +75,16 @@
 <main class="pg">
   <header>
     <h1>Preços por bairro</h1>
+    <section class="resumo" id="resumo-proximos" style="margin-top:14px">
+      <h2>Resumo dos postos próximos · <span id="r-dia">—</span></h2>
+      <p>Preço de cada combustível no seu posto e nos postos próximos, no dia escolhido. Embaixo do preço, a diferença para o seu posto: em vermelho quem está mais barato que você, em verde quem está mais caro. A última linha traz o menor preço de toda Natal como referência. O etanol quase não aparece no Nota Potiguar (poucos postos de Natal têm nota de etanol registrada), por isso a referência costuma ser o único preço dele.</p>
+      <div class="tab-wrap">
+        <table>
+          <thead><tr><th>Posto</th><th>Gasolina comum</th><th>Etanol</th><th>Diesel S500</th><th>Diesel S10</th><th>GNV</th></tr></thead>
+          <tbody id="r-proximos"></tbody>
+        </table>
+      </div>
+    </section>
     <p class="frase" id="frase">Carregando…</p>
     <p class="fonte">Preços das notas fiscais no Nota Potiguar (SEFAZ-RN), captados todo dia às 9h30. Um posto só aparece depois de vender aquele combustível com nota. Atualizado em <span id="atualizado">—</span>.</p>
   </header>
@@ -180,7 +202,38 @@
     const dm = r.meu != null && r.menor ? r.meu - r.menor.preco : null, dd = r.meu != null && r.media != null ? r.meu - r.media : null;
     $('c-dmenor').textContent = dif(dm); $('c-dmenor').className = dm == null ? '' : dm > 0.005 ? 'ruim' : 'bom';
     $('c-dmedia').textContent = dif(dd); $('c-dmedia').className = dd == null ? '' : dd > 0.005 ? 'ruim' : 'bom';
-    graficoBairros(r.meu); graficoEvolucao(); tabela();
+    graficoBairros(r.meu); graficoEvolucao(); tabela(); quadroProximos();
+  }
+
+  function quadroProximos() {
+    $('r-dia').textContent = dia(st.data);
+    const tb = $('r-proximos'); tb.replaceChildren();
+    const combs = ['Gasolina comum', 'Etanol', 'Diesel S500', 'Diesel S10', 'GNV'];
+    const doDia = linhas.filter((r) => r.data === st.data);
+    const achar = (f, c) => doDia.filter((r) => r.combustivel === c && f(r)).sort((a, b) => a.preco - b.preco)[0];
+    const meus = {}; combs.forEach((c) => { meus[c] = achar((r) => r.meuPosto, c); });
+    const celula = (r, c, comDif, comOnde) => {
+      const td = document.createElement('td');
+      if (!r) { td.textContent = 'sem nota'; td.className = 'r-vazio'; return td; }
+      td.append(r$(r.preco).replace('R$ ', ''));
+      const m = meus[c];
+      if (comDif && m) {
+        const d = Math.round((r.preco - m.preco) * 100) / 100;
+        const s = document.createElement('span'); s.className = 'r-dif ' + (d < 0 ? 'r-barato' : d > 0 ? 'r-caro' : '');
+        s.textContent = d === 0 ? 'igual' : dif(d); td.append(s);
+      }
+      if (comOnde) { const o = document.createElement('span'); o.className = 'r-onde'; o.textContent = r.posto + ' · ' + r.bairro; td.append(o); }
+      return td;
+    };
+    const fileiras = [{ nome: 'MIGRA (seu posto)', cls: 'r-meu', f: (r) => r.meuPosto, dif: false }]
+      .concat(PROXIMOS.map((n) => ({ nome: n, f: (r) => String(r.posto || '').trim().toUpperCase() === n, dif: true })))
+      .concat([{ nome: 'Menor preço em Natal (referência)', cls: 'r-ref', f: () => true, dif: true, onde: true }]);
+    fileiras.forEach((l) => {
+      const tr = document.createElement('tr'); if (l.cls) tr.className = l.cls;
+      const td0 = document.createElement('td'); td0.textContent = l.nome; tr.appendChild(td0);
+      combs.forEach((c) => tr.appendChild(celula(achar(l.f, c), c, l.dif, l.onde)));
+      tb.appendChild(tr);
+    });
   }
 
   function graficoBairros(meu) {
